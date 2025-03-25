@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authorization Callback</title>
+</head>
+<body>
+    <h1>Authorization Code Redirect</h1>
+    <p id="status">Waiting for authorization code...</p>
+    
+    <script>
+        // Extract the authorization code from the URL query parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const authCode = urlParams.get('code');
+        
+        if (authCode) {
+            document.getElementById("status").innerText = `Authorization Code: ${authCode}`;
+            // Normally, you'd send this authorization code to your server for token exchange
+            console.log("Authorization Code:", authCode);
+        } else {
+            document.getElementById("status").innerText = "No authorization code found!";
+        }
+    </script>
+</body>
+</html>
