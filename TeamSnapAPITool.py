@@ -124,7 +124,7 @@ def get_events_by_date(access_token, teams, target_date, event_type, progress_ca
                         try:
                             start_time_str = event_details.get("start_date")
                             location = event_details.get("location_name", "No Location")
-                            opponent = event_details.get("opponent_name", "N/A") # Opponent might not be relevant for practices
+                            opponent = event_details.get("opponent_name", "N/A")
                             current_team = details['name']
                             division = details['division']
 
@@ -140,13 +140,17 @@ def get_events_by_date(access_token, teams, target_date, event_type, progress_ca
                                 local_day_str_display = local_time.strftime("%a")
 
                                 if local_date_str_display == target_date:
-                                    # Create a unique identifier for the event
-                                    event_identifier = (event_id, local_time)
+                                    if is_game_flag:
+                                        # Create a sorted tuple of team and opponent to handle reversals
+                                        teams_involved = tuple(sorted((current_team, opponent)))
+                                        event_identifier = (local_time, location, division, teams_involved)
+                                    else:
+                                        event_identifier = (local_time, location, division, current_team)
 
                                     if event_identifier not in seen_events:
                                         all_events.append({
                                             "full_item": item,  # Store the entire item
-                                            "id": event_id,
+                                            "id": event_id, # Still store the ID
                                             "day": local_day_str_display,
                                             "date": local_date_str_display,
                                             "time": local_time_str_display,
@@ -229,7 +233,8 @@ CLIENT_ID = "Eocrv5rmAg8v33ADCmM0dFS8dE4Vw6UJ5RdtIRDPojk"
 CLIENT_SECRET = "xtIrH7i_doYM4Jj-jVlDXiBjCkqTT1wMmbHQa9tzGuM"
 AUTH_URL = "https://auth.teamsnap.com/oauth/authorize"
 TOKEN_URL = "https://auth.teamsnap.com/oauth/token"
-REDIRECT_URI = "https://github.com/NightPants/teamsnap-redirect"
+REDIRECT_URI = "https://www.tworiverlittleleague.com/tsapiauthenticator/"
+#REDIRECT_URI = "https://github.com/NightPants/teamsnap-redirect"
 USER_INFO_URL = "https://api.teamsnap.com/v3/me"
 TEAMS_URL = "https://api.teamsnap.com/v3/teams"
 EVENTS_URL = "https://api.teamsnap.com/v3/events/search"
@@ -257,7 +262,7 @@ def submit_auth_code():
     access_token = get_access_token(code)
     if access_token:
         auth_status_label.config(text="Authentication Status: Authenticated", foreground="green")
-        messagebox.showinfo("Success", "Successfully obtained access token.")
+        # Removed the success messagebox
         auth_code_frame.pack_forget() # Hide the input fields
         # Load team info based on selection after successful auth
         if team_info_choice.get() == "existing":
@@ -265,7 +270,7 @@ def submit_auth_code():
             stored_team_info = load_team_info_from_csv()
             if stored_team_info:
                 teams = stored_team_info
-                messagebox.showinfo("Info", "Using existing team information.")
+                # Removed the "using existing" messagebox
             else:
                 messagebox.showinfo("Info", "No stored team information found. Please refresh teams.")
         elif team_info_choice.get() == "refresh":
@@ -283,7 +288,7 @@ def refresh_teams_now():
     teams = get_user_teams_with_details(access_token)
     if teams:
         save_team_info_to_csv(teams)
-        messagebox.showinfo("Info", "Team information refreshed.")
+        # Removed the "team information refreshed" messagebox
     else:
         messagebox.showerror("Error", "Could not retrieve team information.")
 
@@ -339,7 +344,7 @@ def fetch_events_threaded():
         root.after(0, finalize_fetch_events)
 
 def populate_results_table(events):
-    global results_tree, export_button
+    global results_tree, export_button, results_label
     # Clear previous results from the table
     for item in results_tree.get_children():
         results_tree.delete(item)
@@ -360,7 +365,12 @@ def populate_results_table(events):
             export_button.pack(side=tk.LEFT, padx=5)
         elif export_button.winfo_ismapped() == 0: # Check if not already visible
             export_button.pack(side=tk.LEFT, padx=5)
+
+        # Update the results label with the event count
+        results_label.config(text=f"Event Results: ({len(events)} events)")
+
     else:
+        results_label.config(text="Event Results: (0 events)")
         messagebox.showinfo("Info", f"No {event_type_str.lower()} found for this date.")
         # Hide the export button if no results
         if export_button is not None and export_button.winfo_ismapped() == 1:
@@ -431,7 +441,7 @@ def ask_run_again():
     no_button.pack(side=tk.RIGHT, padx=10, pady=10)
 
 def reset_for_another_date():
-    global cal, export_button, refresh_now_button, progress_bar, fetch_button
+    global cal, export_button, refresh_now_button, progress_bar, fetch_button, results_label
     cal.set_date(datetime.now().date()) # Reset to current date
     event_type_var.set("All")
     town_var.set("No Filter")
@@ -449,6 +459,7 @@ def reset_for_another_date():
         progress_bar.destroy()
         progress_bar = None
     fetch_button.config(state=tk.NORMAL)
+    results_label.config(text="Event Results:") # Reset the label
     ask_run_again_window.destroy()
 
 # --- GUI Setup ---
