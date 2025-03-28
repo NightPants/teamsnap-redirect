@@ -449,6 +449,7 @@ def fetch_events_threaded():
 
     if selected_division != "All Divisions" and selected_team_id == "division_filter":
         all_fetched_events = []
+        seen_events = set()  # Initialize a set to track seen events
         total_teams_to_fetch = sum(1 for team_info in teams.values() if team_info.get('division') == selected_division)
         teams_fetched = 0
         for team_id, team_info in teams.items():
@@ -457,9 +458,19 @@ def fetch_events_threaded():
                 division = team_info.get('division', 'Unknown Division')
                 team_name = team_info.get('name', 'Unknown Team')  # Get the team name here
                 for event in events:
-                    event['division'] = division
-                    event['team_name'] = team_name  # Add the actual team name to the event data
-                all_fetched_events.extend(events)
+                    opponent = event.get('opponent', 'N/A')
+                    is_game = event.get('is_game')
+                    if is_game:
+                        teams_in_game = tuple(sorted((team_name, opponent)))
+                        event_identifier = (event.get('date'), event.get('time'), event.get('location'), teams_in_game, division, "Game")
+                    else:
+                        event_identifier = (event.get('date'), event.get('time'), event.get('location'), team_name, opponent, division, "Practice")
+
+                    if event_identifier not in seen_events:
+                        event['division'] = division
+                        event['team_name'] = team_name  # Add the actual team name to the event data
+                        all_fetched_events.append(event)
+                        seen_events.add(event_identifier)
                 teams_fetched += 1
                 root.after(0, update_progress_bar, teams_fetched, total_teams_to_fetch)
         events_data = all_fetched_events
@@ -617,16 +628,31 @@ def populate_results_table(events, event_type_str):
     for item in results_tree.get_children():
         results_tree.delete(item)
 
+    # Add a new column for "Cancelled" if it doesn't exist
+    if "Cancelled" not in results_tree['columns']:
+        results_tree['columns'] = ("Time", "Location", "Team", "Opponent", "Division", "Type", "Cancelled")
+        results_tree.heading("Cancelled", text="Cancelled")
+        results_tree.column("Cancelled", width=80)
+
     if events:
         for event in events:
+            is_canceled = event.get('is_canceled')
+            cancelled_status = "Y" if is_canceled else ""
+            tags = ('cancelled',) if is_canceled else ()  # Add a tag for cancelled events
+
             results_tree.insert("", tk.END, values=(
                 event['time'],
                 event['location'],
                 event['team_name'],
                 event.get('opponent', 'N/A') if event['is_game'] else "N/A",
                 event['division'],
-                "Game" if event['is_game'] else "Practice"
-            ))
+                "Game" if event['is_game'] else "Practice",
+                cancelled_status
+            ), tags=tags)
+
+        # Configure a tag to highlight cancelled rows
+        results_tree.tag_configure('cancelled', background='lightgray') # You can choose a different color
+
         # Show the export button if results are present
         if export_button is None:
             export_button = ttk.Button(button_frame, text="Export to CSV", command=export_events_to_csv)
