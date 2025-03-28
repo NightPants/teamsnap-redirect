@@ -291,7 +291,9 @@ def authenticate():
     auth_url = get_authorization_url()
     webbrowser.open(auth_url)
     auth_button.pack_forget() # Hide the authenticate button
-    auth_code_frame.pack(pady=10) # Show the authentication code input frame
+    #auth_code_frame.pack(pady=10) # Show the authentication code input frame
+    auth_code_entry.config(state=tk.NORMAL) # Enable the entry
+    submit_auth_code_button.config(state=tk.NORMAL) # Enable the button
 
 def submit_auth_code():
     global access_token, teams, auth_status_label, stored_team_info
@@ -365,7 +367,7 @@ def populate_team_picker():
         team_picker.destroy()
 
     team_options = ["All Teams"] + [f"{name} ({division})" for name, division, _ in team_options_list]
-    team_picker = ttk.Combobox(team_selection_frame, textvariable=team_name_var, values=team_options, state="readonly", width=30) # Increased width
+    team_picker = ttk.Combobox(team_selection_frame, textvariable=team_name_var, values=team_options, state="readonly", width=60) # Increased width
     team_picker.set("All Teams") # Default selection
     team_picker.pack(padx=5, pady=5)
     team_picker.bind("<<ComboboxSelected>>", on_team_selected)
@@ -714,11 +716,12 @@ auth_button.pack(pady=10)
 
 # Authentication Code Input Frame (initially hidden)
 auth_code_frame = ttk.LabelFrame(root, text="Enter Authorization Code")
-auth_code_entry = ttk.Entry(auth_code_frame)
+auth_code_entry = ttk.Entry(auth_code_frame,state=tk.DISABLED)
 auth_code_entry.pack(padx=10, pady=5)
-submit_auth_code_button = ttk.Button(auth_code_frame, text="Submit Code", command=submit_auth_code)
+submit_auth_code_button = ttk.Button(auth_code_frame, text="Submit Code", command=submit_auth_code,state=tk.DISABLED)
 submit_auth_code_button.pack(pady=5)
-auth_code_frame.pack_forget() # Initially hidden
+auth_code_frame.pack(pady=10)
+#auth_code_frame.pack_forget() # Initially hidden
 
 # Team Info Handling
 team_info_frame = ttk.LabelFrame(root, text="Team Information")
@@ -748,7 +751,7 @@ team_selection_frame = ttk.LabelFrame(root, text="Select Team")
 team_selection_frame.pack(padx=10, pady=10, fill="x")
 
 # Team Picker (Combobox will be populated after authentication and team info loading)
-team_picker = ttk.Combobox(team_selection_frame, textvariable=team_name_var, values=[], state="readonly", width=30) # Increased width
+team_picker = ttk.Combobox(team_selection_frame, textvariable=team_name_var, values=[], state="readonly", width=60) # Increased width
 team_picker.set("Select Team")
 team_picker.pack(padx=5, pady=5)
 team_picker.bind("<<ComboboxSelected>>", on_team_selected)
