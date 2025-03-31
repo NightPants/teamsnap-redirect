@@ -305,7 +305,7 @@ def update_progress_bar(current, total):
         root.update_idletasks()
 
 def fetch_events_threaded():
-    global access_token, teams, events_data, cal, results_tree, export_button, progress_bar, fetch_button
+    global access_token, teams, events_data, cal, results_tree, export_button, progress_bar, fetch_button,event_type_var
 
     selected_date = cal.get_date()
     target_date = datetime.strptime(selected_date, "%m/%d/%y").strftime("%m/%d/%y")  # Format to MM/DD/YY
@@ -316,14 +316,51 @@ def fetch_events_threaded():
         event_type_str = "Games"
     elif event_type == 'Practices':
         event_type_str = "Practices"
+    elif event_type == 'Games w/ Ump':
+        event_type_str = "Games" # We'll filter by division later
     else:
         event_type_str = "All"
 
     selected_town = town_var.get()
     selected_team_id = team_id_var.get()
     selected_division = division_var.get()
+    
+    if event_type == 'Games w/ Ump':
+        ump_divisions = {
+            "4th / 5th Grade Softball 2025",
+            "6th / 7th / 8th Grade Softball 2025",
+            "Juniors BB 2025 (13/14U)",
+            "Majors BB 2025 (11/12U)",
+            "Minors BB 2025 (10U)",
+            "Rookies BB 2025 (9U)"
+        }
+        all_fetched_events = []
+        seen_events = set()
+        teams_to_fetch = {team_id: info for team_id, info in teams.items() if info.get('division') in ump_divisions}
+        total_teams_to_fetch = len(teams_to_fetch)
+        teams_fetched = 0
+        for team_id, team_info in teams_to_fetch.items():
+            events = get_events_by_date(access_token, team_id, target_date, event_type_str)
+            division = team_info.get('division', 'Unknown Division')
+            team_name = team_info.get('name', 'Unknown Team')
+            for event in events:
+                opponent = event.get('opponent', 'N/A')
+                is_game = event.get('is_game')
+                if is_game:
+                    teams_in_game = tuple(sorted((team_name, opponent)))
+                    event_identifier = (event.get('date'), event.get('time'), event.get('location'), teams_in_game, division, "Game")
+                else:
+                    event_identifier = (event.get('date'), event.get('time'), event.get('location'), team_name, opponent, division, "Practice")
 
-    if selected_division != "All Divisions" and selected_team_id == "division_filter":
+                if event_identifier not in seen_events:
+                    event['division'] = division
+                    event['team_name'] = team_name
+                    all_fetched_events.append(event)
+                    seen_events.add(event_identifier)
+            teams_fetched += 1
+            root.after(0, update_progress_bar, teams_fetched, total_teams_to_fetch)
+        events_data = all_fetched_events
+    elif selected_division != "All Divisions" and selected_team_id == "division_filter":
         all_fetched_events = []
         seen_events = set()  # Initialize a set to track seen events
         total_teams_to_fetch = sum(1 for team_info in teams.values() if team_info.get('division') == selected_division)
@@ -764,37 +801,38 @@ def filter_games_by_town(games, selected_town): # Renamed to filter_events_by_to
 
     return filtered_games
 
-# --- GUI Setup ---
+# --- Main Window Setup ---
 root = tk.Tk()
 root.title("Teamsnap Event Viewer")
 
-team_name_var = tk.StringVar() # To store the selected team name
-team_division_var = tk.StringVar() # To store the selected team division
-team_id_var = tk.StringVar() # To store the selected team ID
-team_options_list = [] # List to hold team name and division for the picker
+# --- Variables ---
+# Variables to store user selections and data
+team_name_var = tk.StringVar()
+team_division_var = tk.StringVar()
+team_id_var = tk.StringVar()
+team_options_list = []
 event_type_var = tk.StringVar(value="All")
 town_var = tk.StringVar(value="No Filter")
 team_info_choice = tk.StringVar(value="existing") # Default to use existing
-show_all_dates = tk.BooleanVar() # For showing entire schedule
+show_all_dates = tk.BooleanVar()
 
-# Authentication Status
+# --- Authentication Section ---
 auth_status_label = ttk.Label(root, text="Authentication Status: Not Authenticated", foreground="red")
 auth_status_label.pack(pady=5)
 
-# Authentication Button
 auth_button = ttk.Button(root, text="Authenticate with Teamsnap", command=authenticate)
 auth_button.pack(pady=10)
 
 # Authentication Code Input Frame (initially hidden)
 auth_code_frame = ttk.LabelFrame(root, text="Enter Authorization Code")
-auth_code_entry = ttk.Entry(auth_code_frame,state=tk.DISABLED)
+auth_code_entry = ttk.Entry(auth_code_frame, state=tk.DISABLED)
 auth_code_entry.pack(padx=10, pady=5)
-submit_auth_code_button = ttk.Button(auth_code_frame, text="Submit Code", command=submit_auth_code,state=tk.DISABLED)
+submit_auth_code_button = ttk.Button(auth_code_frame, text="Submit Code", command=submit_auth_code, state=tk.DISABLED)
 submit_auth_code_button.pack(pady=5)
 auth_code_frame.pack(pady=10)
-#auth_code_frame.pack_forget() # Initially hidden
+# auth_code_frame.pack_forget() # Initially hidden
 
-# Team Info Handling
+# --- Team Information Handling Section ---
 team_info_frame = ttk.LabelFrame(root, text="Team Information")
 team_info_frame.pack(padx=10, pady=10, fill="x")
 
@@ -809,17 +847,13 @@ refresh_teams_radio.pack(side=tk.TOP, anchor="w", padx=5, pady=2)
 # Progress bar for refresh teams (initially hidden)
 progress_bar_refresh_teams = None
 
-# Refresh Now Button
 refresh_now_button = ttk.Button(team_info_frame, text="Refresh Now", command=refresh_teams_now)
 refresh_now_button.pack(side=tk.LEFT, padx=5, pady=5)
 
-# Label to display last refreshed time
 last_refreshed_label = ttk.Label(team_info_frame, text=f"Last Refreshed: {get_last_modified_time()}")
 last_refreshed_label.pack(side=tk.TOP, anchor="w", padx=15, pady=2)
 
-# ... (rest of your GUI setup)
-
-# Team Selection Frame
+# --- Team Selection Section ---
 team_selection_frame = ttk.LabelFrame(root, text="Select Team")
 team_selection_frame.pack(padx=10, pady=10, fill="x")
 
@@ -829,19 +863,17 @@ team_picker.set("Select Team")
 team_picker.pack(padx=5, pady=5)
 team_picker.bind("<<ComboboxSelected>>", on_team_selected)
 
-# Division Selection Frame
+# --- Division Filter Section ---
 division_selection_frame = ttk.LabelFrame(root, text="Filter by Division")
 division_selection_frame.pack(padx=10, pady=10, fill="x")
 
-division_var = tk.StringVar(value="All Divisions") # To store the selected division
-division_options = ["All Divisions"] # Initialize with an "All" option
+division_var = tk.StringVar(value="All Divisions")
+division_options = ["All Divisions"]
 division_combo = ttk.Combobox(division_selection_frame, textvariable=division_var, values=division_options, state="readonly", width=60)
 division_combo.pack(padx=5, pady=5)
 division_combo.bind("<<ComboboxSelected>>", on_division_selected)
 
-# ... (rest of your GUI setup)
-
-# Date Selection using Calendar
+# --- Date Selection Section ---
 date_frame = ttk.LabelFrame(root, text="Select Date")
 date_frame.pack(padx=10, pady=10, fill="x")
 
@@ -852,22 +884,20 @@ cal = Calendar(date_frame, selectmode='day',
 cal.pack(pady=5)
 
 # Show All Dates Checkbutton
-show_all_dates = tk.BooleanVar() # For showing entire schedule <--- MOVE THIS LINE HERE
+show_all_dates = tk.BooleanVar() # For showing entire schedule
 show_all_dates_check = ttk.Checkbutton(date_frame, text="Show All Dates", variable=show_all_dates)
 show_all_dates_check.pack(pady=5)
 
-# Event Type Selection
+# --- Event Type Filter Section ---
 event_type_frame = ttk.LabelFrame(root, text="Filter by Event Type")
 event_type_frame.pack(padx=10, pady=10, fill="x")
 
-games_radio = ttk.Radiobutton(event_type_frame, text="Games", variable=event_type_var, value="Games")
-games_radio.pack(side=tk.LEFT, padx=5)
-practices_radio = ttk.Radiobutton(event_type_frame, text="Practices", variable=event_type_var, value="Practices")
-practices_radio.pack(side=tk.LEFT, padx=5)
-all_radio = ttk.Radiobutton(event_type_frame, text="All", variable=event_type_var, value="All")
-all_radio.pack(side=tk.LEFT, padx=5)
+ttk.Radiobutton(event_type_frame, text="All", variable=event_type_var, value="All").pack(side=tk.LEFT, padx=5)
+ttk.Radiobutton(event_type_frame, text="Games", variable=event_type_var, value="Games").pack(side=tk.LEFT, padx=5)
+ttk.Radiobutton(event_type_frame, text="Practices", variable=event_type_var, value="Practices").pack(side=tk.LEFT, padx=5)
+ttk.Radiobutton(event_type_frame, text="Games w/ Ump", variable=event_type_var, value="Games w/ Ump").pack(side=tk.LEFT, padx=5) # Added new option
 
-# Town Selection
+# --- Town Filter Section ---
 town_frame = ttk.LabelFrame(root, text="Filter by Town")
 town_frame.pack(padx=10, pady=10, fill="x")
 
@@ -875,15 +905,14 @@ town_options = ["No Filter", "Rumson", "Little Silver", "Red Bank", "Fair Haven"
 town_combo = ttk.Combobox(town_frame, textvariable=town_var, values=town_options)
 town_combo.pack(padx=5, pady=5)
 
-# Fetch and Export Buttons Frame
+# --- Buttons Section ---
 button_frame = ttk.Frame(root)
 button_frame.pack(pady=10)
 
-# Fetch Events Button
 fetch_button = ttk.Button(button_frame, text="Fetch Events", command=fetch_events)
 fetch_button.pack(side=tk.LEFT, padx=5)
 
-# Results Display in a Table
+# --- Results Display Section ---
 results_label = ttk.Label(root, text="Event Results:")
 results_label.pack()
 results_tree = ttk.Treeview(root, columns=("Time", "Location", "Team", "Opponent", "Division", "Type"), show="headings", selectmode="extended") # Enable extended selection
@@ -893,17 +922,17 @@ results_tree.heading("Team", text="Team")
 results_tree.heading("Opponent", text="Opponent")
 results_tree.heading("Division", text="Division")
 results_tree.heading("Type", text="Type")
-results_tree.column("Time", width=80)  # Reduced width
-results_tree.column("Type", width=80)  # Reduced width
+results_tree.column("Time", width=80)
+results_tree.column("Type", width=80)
 results_tree.pack(padx=10, pady=10, fill="both", expand=True)
 
 # Bind Ctrl+C to the treeview for copying
 results_tree.bind("<Control-c>", copy_table_to_clipboard)
 
-# Run Again Logic
+# --- Run Again Logic ---
 ask_run_again_window = None # Initialize
 
-# Initial display of last refreshed time
+# --- Initial Setup ---
 if team_info_choice.get() == "existing":
     pass # Time will be shown on startup
 elif team_info_choice.get() == "refresh":
@@ -913,4 +942,5 @@ elif team_info_choice.get() == "refresh":
 # Call team_info_choice_changed once at the end of setup to handle initial state
 team_info_choice_changed()
 
+# --- Start the Tkinter Event Loop ---
 root.mainloop()
