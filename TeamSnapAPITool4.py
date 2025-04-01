@@ -223,7 +223,7 @@ def refresh_teams_now():
             if teams:
                 save_team_info_to_csv(teams)
                 team_options_list = sorted([(details['name'], details['division'], team_id) for team_id, details in teams.items()], key=lambda item: item[0])
-                root.after(0, populate_team_picker) # Populate picker on the main thread
+                root.after(0, populate_team_picker(teams)) # Populate picker on the main thread
                 if last_refreshed_label:
                     last_refreshed_label.config(text=f"Last Refreshed: {get_last_modified_time()}")
             else:
@@ -836,13 +836,15 @@ auth_code_frame.pack(pady=10)
 team_info_frame = ttk.LabelFrame(root, text="Team Information")
 team_info_frame.pack(padx=10, pady=10, fill="x")
 
+team_info_choice = tk.StringVar(value="existing") # Initialize with a default value
+
 team_info_choice.trace_add("write", lambda *args: team_info_choice_changed()) # Trace changes to the radio buttons
 
 use_existing_radio = ttk.Radiobutton(team_info_frame, text="Use Existing Team Info", variable=team_info_choice, value="existing")
-use_existing_radio.pack(side=tk.TOP, anchor="w", padx=5, pady=2)
+use_existing_radio.pack(side=tk.LEFT, padx=5, pady=2)
 
 refresh_teams_radio = ttk.Radiobutton(team_info_frame, text="Refresh Teams", variable=team_info_choice, value="refresh")
-refresh_teams_radio.pack(side=tk.TOP, anchor="w", padx=5, pady=2)
+refresh_teams_radio.pack(side=tk.LEFT, padx=5, pady=2)
 
 # Progress bar for refresh teams (initially hidden)
 progress_bar_refresh_teams = None
@@ -851,7 +853,7 @@ refresh_now_button = ttk.Button(team_info_frame, text="Refresh Now", command=ref
 refresh_now_button.pack(side=tk.LEFT, padx=5, pady=5)
 
 last_refreshed_label = ttk.Label(team_info_frame, text=f"Last Refreshed: {get_last_modified_time()}")
-last_refreshed_label.pack(side=tk.TOP, anchor="w", padx=15, pady=2)
+last_refreshed_label.pack(side=tk.LEFT, padx=15, pady=2)
 
 # --- Team Selection Section ---
 team_selection_frame = ttk.LabelFrame(root, text="Select Team")
@@ -872,6 +874,14 @@ division_options = ["All Divisions"]
 division_combo = ttk.Combobox(division_selection_frame, textvariable=division_var, values=division_options, state="readonly", width=60)
 division_combo.pack(padx=5, pady=5)
 division_combo.bind("<<ComboboxSelected>>", on_division_selected)
+
+# --- Town Filter Section ---
+town_frame = ttk.LabelFrame(root, text="Filter by Town")
+town_frame.pack(padx=10, pady=10, fill="x")
+
+town_options = ["No Filter", "Rumson", "Little Silver", "Red Bank", "Fair Haven", "Shrewsbury", "Non-TRLL Towns"]
+town_combo = ttk.Combobox(town_frame, textvariable=town_var, values=town_options)
+town_combo.pack(padx=5, pady=5)
 
 # --- Date Selection Section ---
 date_frame = ttk.LabelFrame(root, text="Select Date")
@@ -896,14 +906,6 @@ ttk.Radiobutton(event_type_frame, text="All", variable=event_type_var, value="Al
 ttk.Radiobutton(event_type_frame, text="Games", variable=event_type_var, value="Games").pack(side=tk.LEFT, padx=5)
 ttk.Radiobutton(event_type_frame, text="Practices", variable=event_type_var, value="Practices").pack(side=tk.LEFT, padx=5)
 ttk.Radiobutton(event_type_frame, text="Games w/ Ump", variable=event_type_var, value="Games w/ Ump").pack(side=tk.LEFT, padx=5) # Added new option
-
-# --- Town Filter Section ---
-town_frame = ttk.LabelFrame(root, text="Filter by Town")
-town_frame.pack(padx=10, pady=10, fill="x")
-
-town_options = ["No Filter", "Rumson", "Little Silver", "Red Bank", "Fair Haven", "Shrewsbury", "Non-TRLL Towns"]
-town_combo = ttk.Combobox(town_frame, textvariable=town_var, values=town_options)
-town_combo.pack(padx=5, pady=5)
 
 # --- Buttons Section ---
 button_frame = ttk.Frame(root)
