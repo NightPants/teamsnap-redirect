@@ -256,7 +256,8 @@ def populate_team_picker(teams_data):
 
     team_options = [option[0] for option in team_options_list]
     team_picker['values'] = team_options
-    team_picker.set("Select Team")
+    team_picker.set("All Teams") # Set the default value to "All Teams"     
+    team_id_var.set("all") # Immediately set team_id_var to "all" since "All Teams" is the default
 
     # Populate division options
     division_options = ["All Divisions"] + sorted(list(unique_divisions))
@@ -541,11 +542,11 @@ def populate_results_table(events, event_type_str):
     for item in results_tree.get_children():
         results_tree.delete(item)
 
-    # Add a new column for "Cancelled" if it doesn't exist
+    # Add a new column for "Cancelled" if it doesn't exist (only the heading needs to be set here if it wasn't initially)
     if "Cancelled" not in results_tree['columns']:
         results_tree['columns'] = ("Time", "Location", "Team", "Opponent", "Division", "Type", "Cancelled")
-        results_tree.heading("Cancelled", text="Cancelled")
-        results_tree.column("Cancelled", width=80)
+        results_tree.heading("Cancelled", text="Cancelled", command=lambda: sort_treeview(results_tree, "Cancelled", False))
+        # Note: Do NOT set width here if you want user adjustments to persist
 
     if events:
         for event in events:
@@ -553,7 +554,7 @@ def populate_results_table(events, event_type_str):
             cancelled_status = "Y" if is_canceled else ""
             tags = ('cancelled',) if is_canceled else ()  # Add a tag for cancelled events
 
-            results_tree.insert("", tk.END, values=(
+            values = [
                 event['time'],
                 event['location'],
                 event['team_name'],
@@ -561,7 +562,8 @@ def populate_results_table(events, event_type_str):
                 event['division'],
                 "Game" if event['is_game'] else "Practice",
                 cancelled_status
-            ), tags=tags)
+            ]
+            results_tree.insert("", tk.END, values=tuple(values), tags=tags)
 
         # Configure a tag to highlight cancelled rows
         results_tree.tag_configure('cancelled', background='lightgray') # You can choose a different color
@@ -801,6 +803,33 @@ def filter_games_by_town(games, selected_town): # Renamed to filter_events_by_to
 
     return filtered_games
 
+def update_treeview(tree, data):
+    tree.delete(*tree.get_children())
+    for item in data:
+        tree.insert("", tk.END, values=item)
+
+def sort_treeview(tree, col, reverse):
+    """Sort the treeview based on the column header."""
+    data = [(tree.set(child, col), child) for child in tree.get_children('')]
+    # Sort based on the data in the specified column
+    data.sort(reverse=reverse)
+
+    for index, (val, child) in enumerate(data):
+        tree.move(child, '', index)
+
+    # Switch the sort direction for the next click
+    tree.heading(col, command=lambda _col=col: sort_treeview(tree, _col, not reverse))
+def heading_clicked(event):
+    """Handle the click on a treeview header."""
+    if results_tree.identify_region(event.x, event.y) == 'heading':
+        column_id = results_tree.identify_column(event.x)
+        # Get the current sort state (default to False if not set)
+        current_sort = results_tree.heading(column_id).get('sort', False)
+        sort_treeview(results_tree, column_id, current_sort)
+        # Toggle the sort state
+        results_tree.heading(column_id, sort=not current_sort)
+
+
 # --- Main Window Setup ---
 root = tk.Tk()
 root.title("Teamsnap Event Viewer")
@@ -815,6 +844,7 @@ event_type_var = tk.StringVar(value="All")
 town_var = tk.StringVar(value="No Filter")
 team_info_choice = tk.StringVar(value="existing") # Default to use existing
 show_all_dates = tk.BooleanVar()
+refresh_now_button = None # Initialize
 
 # --- Authentication Section ---
 auth_status_label = ttk.Label(root, text="Authentication Status: Not Authenticated", foreground="red")
@@ -855,9 +885,13 @@ refresh_now_button.pack(side=tk.LEFT, padx=5, pady=5)
 last_refreshed_label = ttk.Label(team_info_frame, text=f"Last Refreshed: {get_last_modified_time()}")
 last_refreshed_label.pack(side=tk.LEFT, padx=15, pady=2)
 
+# --- Container Frame for Team Selection, Division, and Town Filters ---
+filter_container_frame = ttk.Frame(root)
+filter_container_frame.pack(padx=10, pady=10, fill="x")
+
 # --- Team Selection Section ---
-team_selection_frame = ttk.LabelFrame(root, text="Select Team")
-team_selection_frame.pack(padx=10, pady=10, fill="x")
+team_selection_frame = ttk.LabelFrame(filter_container_frame, text="Select Team")
+team_selection_frame.pack(side=tk.LEFT, padx=10, pady=10, fill="x", expand=True) # Use side=LEFT and expand
 
 # Team Picker (Combobox will be populated after authentication and team info loading)
 team_picker = ttk.Combobox(team_selection_frame, textvariable=team_name_var, values=[], state="readonly", width=60) # Increased width
@@ -866,8 +900,8 @@ team_picker.pack(padx=5, pady=5)
 team_picker.bind("<<ComboboxSelected>>", on_team_selected)
 
 # --- Division Filter Section ---
-division_selection_frame = ttk.LabelFrame(root, text="Filter by Division")
-division_selection_frame.pack(padx=10, pady=10, fill="x")
+division_selection_frame = ttk.LabelFrame(filter_container_frame, text="Filter by Division")
+division_selection_frame.pack(side=tk.LEFT, padx=10, pady=10, fill="x", expand=True) # Use side=LEFT and expand
 
 division_var = tk.StringVar(value="All Divisions")
 division_options = ["All Divisions"]
@@ -876,8 +910,8 @@ division_combo.pack(padx=5, pady=5)
 division_combo.bind("<<ComboboxSelected>>", on_division_selected)
 
 # --- Town Filter Section ---
-town_frame = ttk.LabelFrame(root, text="Filter by Town")
-town_frame.pack(padx=10, pady=10, fill="x")
+town_frame = ttk.LabelFrame(filter_container_frame, text="Filter by Town")
+town_frame.pack(side=tk.LEFT, padx=10, pady=10, fill="x", expand=True) # Use side=LEFT and expand
 
 town_options = ["No Filter", "Rumson", "Little Silver", "Red Bank", "Fair Haven", "Shrewsbury", "Non-TRLL Towns"]
 town_combo = ttk.Combobox(town_frame, textvariable=town_var, values=town_options)
@@ -917,15 +951,24 @@ fetch_button.pack(side=tk.LEFT, padx=5)
 # --- Results Display Section ---
 results_label = ttk.Label(root, text="Event Results:")
 results_label.pack()
-results_tree = ttk.Treeview(root, columns=("Time", "Location", "Team", "Opponent", "Division", "Type"), show="headings", selectmode="extended") # Enable extended selection
-results_tree.heading("Time", text="Time")
-results_tree.heading("Location", text="Location")
-results_tree.heading("Team", text="Team")
-results_tree.heading("Opponent", text="Opponent")
-results_tree.heading("Division", text="Division")
-results_tree.heading("Type", text="Type")
-results_tree.column("Time", width=80)
-results_tree.column("Type", width=80)
+results_tree = ttk.Treeview(root, columns=("Time", "Location", "Team", "Opponent", "Division", "Type", "Cancelled"), show="headings", selectmode="extended") # Include "Cancelled" initially
+
+results_tree.heading("Time", text="Time", command=lambda: sort_treeview(results_tree, "Time", False))
+results_tree.heading("Location", text="Location", command=lambda: sort_treeview(results_tree, "Location", False))
+results_tree.heading("Team", text="Team", command=lambda: sort_treeview(results_tree, "Team", False))
+results_tree.heading("Opponent", text="Opponent", command=lambda: sort_treeview(results_tree, "Opponent", False))
+results_tree.heading("Division", text="Division", command=lambda: sort_treeview(results_tree, "Division", False))
+results_tree.heading("Type", text="Type", command=lambda: sort_treeview(results_tree, "Type", False))
+results_tree.heading("Cancelled", text="Cancelled", command=lambda: sort_treeview(results_tree, "Cancelled", False))
+
+results_tree.column("Time", width=40)
+results_tree.column("Location", width=150)  # Set your desired width
+results_tree.column("Team", width=120)    # Set your desired width
+results_tree.column("Opponent", width=120) # Set your desired width
+results_tree.column("Division", width=160) # Set your desired width
+results_tree.column("Type", width=40)
+results_tree.column("Cancelled", width=60)
+
 results_tree.pack(padx=10, pady=10, fill="both", expand=True)
 
 # Bind Ctrl+C to the treeview for copying
