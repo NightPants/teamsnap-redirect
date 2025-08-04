@@ -1,26 +1,66 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Authorization Callback</title>
+  <title>TeamSnap Auth</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+      text-align: center;
+    }
+    button {
+      padding: 1rem 2rem;
+      font-size: 1.2rem;
+      background-color: #5b3fc3;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    #token-display {
+      margin-top: 2rem;
+      word-break: break-word;
+    }
+  </style>
 </head>
 <body>
-    <h1>Authorization Code Redirect</h1>
-    <p id="status">Waiting for authorization code...</p>
-    
-    <script>
-        // Extract the authorization code from the URL query parameters
-        const urlParams = new URLSearchParams(window.location.search);
-        const authCode = urlParams.get('code');
-        
-        if (authCode) {
-            document.getElementById("status").innerText = `Authorization Code: ${authCode}`;
-            // Normally, you'd send this authorization code to your server for token exchange
-            console.log("Authorization Code:", authCode);
-        } else {
-            document.getElementById("status").innerText = "No authorization code found!";
+  <h1>TRLL + TeamSnap Integration</h1>
+  <p>Click below to authenticate with TeamSnap:</p>
+  <button onclick="loginToTeamSnap()">Login with TeamSnap</button>
+  <div id="token-display"></div>
+
+  <script>
+    const CLIENT_ID = 'Eocrv5rmAg8v33ADCmM0dFS8dE4Vw6UJ5RdtIRDPojk';
+    const REDIRECT_URI = 'https://www.tworiverlittleleague.com/tsapiauthenticator/';
+    const SCOPES = 'read write_members';
+
+    function loginToTeamSnap() {
+      const authUrl = `https://auth.teamsnap.com/oauth/authorize` +
+                      `?client_id=${CLIENT_ID}` +
+                      `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+                      `&scope=${encodeURIComponent(SCOPES)}` +
+                      `&response_type=token`;
+      window.location.href = authUrl;
+    }
+
+    function extractTokenFromUrl() {
+      if (window.location.hash && window.location.hash.includes('access_token')) {
+        const fragment = window.location.hash.substring(1);
+        const params = new URLSearchParams(fragment);
+        const accessToken = params.get('access_token');
+        if (accessToken) {
+          document.getElementById('token-display').innerHTML = `
+            <h3>Access Token:</h3>
+            <code>${accessToken}</code>
+            <p><strong>Use this token in API calls:</strong><br><code>Authorization: Bearer ${accessToken}</code></p>
+          `;
         }
-    </script>
+      }
+    }
+
+    extractTokenFromUrl();
+  </script>
 </body>
 </html>
+
